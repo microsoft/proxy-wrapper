@@ -7,6 +7,6 @@ include(GNUInstallDirs)
 
 find_library(proxy REQUIRED)
 
-add_library(proxywrapper SHARED proxywrapper.cpp)
+add_library(proxywrapper SHARED ProxyWrapper.cpp)
 
 target_link_libraries(proxywrapper proxy)
