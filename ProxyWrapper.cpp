@@ -1,6 +1,5 @@
-
-#include <proxy.h>
 #include "ProxyWrapper.h"
+#include <proxy.h>
 
 extern "C" {
 
@@ -20,4 +19,4 @@ catch (...)
     return nullptr;
 }
 
-} // extern
+} // extern "C"
