@@ -23,14 +23,10 @@ def main():
     build.run()
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Builds the DeliveryOptimization cross-platform client.')
+    parser = argparse.ArgumentParser(description='Builds the wrapper shared lib for libproxy.')
     parser.add_argument(
         '--operation', dest='operation', type=str,
         help='The operation to perform. e.g. generate/build/cleanonly. Default is generate+build.'
-    )
-    parser.add_argument(
-        '--platform', dest='platform', type=str,
-        help='The target platform. e.g. windows or linux.'
     )
     parser.add_argument(
         '--arch', dest='arch', type=str,
@@ -41,28 +37,12 @@ def parse_args():
         help='The target configuration. e.g. debug or release.'
     )
     parser.add_argument(
-        '--compiler', dest='compiler', type=str,
-        help='The compiler to use. e.g. gnu, or msvc.'
-    )
-    parser.add_argument(
-        '--cmaketarget', dest='cmaketarget', type=str,
-        help='The cmake target to build. e.g. dosvc or dosvc_unity'
-    )
-    parser.add_argument(
         '--vcpkgdir', dest='vcpkgdir', type=str,
         help='The path to use for building (cmake cache, obj files, bin files, etc.).'
     )
     parser.add_argument(
         '--clean', dest='clean', action='store_true',
         help='Remove built binaries before re-building them.'
-    )
-    parser.add_argument(
-        '--runtests', dest='runtests', action='store_true',
-        help='Runs all unit test executables in default executable location.'
-    )
-    parser.add_argument(
-        '--as-service', dest='as_service', action='store_true',
-        help='Builds the client for running as a daemon'
     )
 
     return parser.parse_args()
@@ -85,33 +65,10 @@ def create_build_runner(script_args):
         The appropriate subclass of Build.
     """
 
-    # Default cases where platform was not specified
-    if script_args.platform is None and is_running_on_windows():
-        return WindowsBuildRunner(script_args)
-    elif script_args.platform is None and is_running_on_linux():
+    if is_running_on_linux():
         return LinuxBuildRunner(script_args)
-    elif script_args.platform is None and is_running_on_osx():
-        return OsxBuildRunner(script_args)
-    elif script_args.platform is None:
-        raise ValueError('Target platform was not specified and could not be deduced from the current host environment.')
-    # Cases where platform was specified in script args.
-    elif script_args.platform.lower() == 'windows':
-        if is_running_on_windows():
-            return WindowsBuildRunner(script_args)
-        else:
-            raise NotSupportedHostEnvironmentError('Building for Windows on this host environment is not supported.')
-    elif script_args.platform.lower() == 'linux':
-        if is_running_on_linux():
-            return LinuxBuildRunner(script_args)
-        else:
-            raise NotSupportedHostEnvironmentError('Building for Linux on this host environment is not supported.')
-    elif script_args.platform.lower() == 'osx':
-        if is_running_on_osx():
-            return LinuxBuildRunner(script_args)
-        else:
-            raise NotSupportedHostEnvironmentError('Building for OsX on this host environment is not supported.')
     else:
-        raise NotSupportedTargetPlatformError(f'Currently builds for {script_args.platform.lower()} are not supported.')
+        raise NotSupportedTargetPlatformError('Building for this platform is not supported currently')
 
 #region BuildRunner classes
 
@@ -136,15 +93,12 @@ class BuildRunnerBase(object):
         self.operation_type = script_args.operation
         self.project_root_path = get_project_root_path()
         self.vcpkg_root_path = get_env_var('BUILD_VCPKGDIR') if script_args.vcpkgdir is None else script_args.vcpkgdir
-        self.cmake_target = None
-        if (script_args.cmaketarget is None):
-            if (script_args.runtests != True):
-                self.cmake_target = "all"
-        else:
-            self.cmake_target = script_args.cmaketarget
+
+        self.cmake_target = "all"
+
         self.script_args = script_args
         self.is_clean_build = self.script_args.clean
-        self.run_tests = self.script_args.runtests
+
         if self.script_args.arch:
             self.arch = self.script_args.arch.lower()
         elif get_env_var('BUILD_ARCHITECTURE'):
@@ -152,8 +106,7 @@ class BuildRunnerBase(object):
         else:
             self.arch = 'x64'
 
-        if not (self.arch == 'x64' or self.arch == 'x86'
-            or self.arch == 'arm'):
+        if not (self.arch == 'x64' or self.arch == 'x86'):
             raise ValueError(f'Building {self.arch} architecture for {self.platform} is not supported.')
 
         if self.script_args.config:
@@ -165,8 +118,6 @@ class BuildRunnerBase(object):
 
         if not (self.config == 'debug' or self.config == 'release'):
             raise ValueError(f'Building {self.config} configuration for {self.platform} is not supported.')
-
-        self.as_service = script_args.as_service
 
         self.source_path = get_project_root_path()
 
@@ -249,9 +200,6 @@ class BuildRunnerBase(object):
 
             self.print_end_build_msg()
             self.print_times()
-
-        if self.run_tests:
-            self.tests()
 
     def print_start_build_msg(self):
         """Prints a message at the start of Build.run.
@@ -343,9 +291,6 @@ class BuildRunnerBase(object):
         else:
             generate_options.extend(["-DCMAKE_BUILD_TYPE=Release"])
 
-        if self.as_service:
-            generate_options.extend(["-DDO_BUILD_AS_SERVICE=ON"])
-
         return generate_options
 
     def build(self):
@@ -381,84 +326,12 @@ class BuildRunnerBase(object):
         """
         return ["--target", self.cmake_target]
 
-    def tests(self):
-        directory = os.path.join(gettempdir(), self.build_path, "test")
-        if is_running_on_windows():
-            test_exe_name = os.path.join(directory, "docs_tests.exe")
-        elif is_running_on_linux():
-            test_exe_name = os.path.join(directory, "docs_tests")
-        elif build.is_running_on_osx():
-            test_exe_name = os.path.join(directory, "docs_tests") #TBD
-
-        subprocess.call([test_exe_name])
-
-class WindowsBuildRunner(BuildRunnerBase):
-    """Windows BuildRunner class."""
-
-    def __init__(self, script_args):
-        super().__init__(script_args)
-        if (script_args.compiler is not None
-            and script_args.compiler.lower() != self.compiler):
-            raise ValueError('Only msvc compiler is supported for building on Windows.')
-
-        if self.arch.startswith('arm'):
-            warn_message = """
-    Uh Oh! Windows arm builds are broken right now. Expect to hit errors when running arm flavors of the build."""
-            warnings.warn(warn_message)
-
-    @property
-    def platform(self):
-        return 'windows'
-
-    @property
-    def compiler(self):
-        return 'msvc'
-
-    @property
-    def generator(self):
-        if (self.arch == 'x64'):
-            return 'Visual Studio 15 2017 Win64'
-        else:
-            return 'Visual Studio 15 2017'
-
-    @property
-    def generate_options(self):
-        return super().generate_options + [
-                f'-DCMAKE_TOOLCHAIN_FILE={get_vcpkg_toolchain_file_path(self.vcpkg_root_path)}',
-                f'-DVCPKG_TARGET_TRIPLET={self._vcpkg_triplet}'
-            ]
-
-    @property
-    def build_options(self):
-        return super().build_options + ['--config', self.config]
-
-    @property
-    def _vcpkg_triplet(self):
-        """The triplet string required by vcpkg."""
-        # There is no static version of the arm or arm64 packages.
-        # if self.arch.startswith('arm'):
-        #     return f'{self.arch}-{self.platform}'
-        # else:
-        #     return f'{self.arch}-{self.platform}-static'
-
-        # We don't use the 'static' vcpkg install yet.
-        # Looks like vcpkg uses static libs by default.
-        return f'{self.arch}-{self.platform}'
-
 class LinuxBuildRunner(BuildRunnerBase):
     """Linux BuildRunner class."""
 
     def __init__(self, script_args):
         super().__init__(script_args)
-        if self.script_args.compiler:
-            self._compiler = self.script_args.compiler.lower()
-        elif get_env_var('BUILD_COMPILER'):
-            self._compiler = get_env_var('BUILD_COMPILER').lower()
-        else:
-            self._compiler = 'gnu'
-
-        if not (self.compiler == 'gnu' or self.compiler == 'clang'):
-            raise ValueError('Only gnu and clang compilers are supported for building on Linux.')
+        self._compiler = 'gnu'
 
     @property
     def platform(self):
@@ -484,58 +357,6 @@ class LinuxBuildRunner(BuildRunnerBase):
             f'-DCMAKE_TOOLCHAIN_FILE={get_vcpkg_toolchain_file_path(self.vcpkg_root_path)}',
             f'-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE={toolchain_file_path}'
         ]
-
-        if self.arch.startswith('arm'):
-            zlib_dir = get_env_var('ZLIB_ROOT_DIR')
-            if zlib_dir is not None:
-                generate_options.append(f'-DZLIB_ROOT={zlib_dir}')
-
-        return generate_options
-
-class OsxBuildRunner(BuildRunnerBase):
-    """OsX BuildRunner class."""
-
-    def __init__(self, script_args):
-        super().__init__(script_args)
-        if self.script_args.compiler:
-            self._compiler = self.script_args.compiler.lower()
-        elif get_env_var('BUILD_COMPILER'):
-            self._compiler = get_env_var('BUILD_COMPILER').lower()
-        else:
-            self._compiler = 'gnu'
-
-        if not (self.compiler == 'gnu' or self.compiler == 'clang'):
-            raise ValueError('Only gnu and clang compilers are supported for building on OsX.')
-
-    @property
-    def platform(self):
-        return 'osx'
-
-    @property
-    def compiler(self):
-        return self._compiler
-
-    @property
-    def generator(self):
-        return 'Unix Makefiles'
-
-    @property
-    def generate_options(self):
-        toolchain_file_path = get_cmake_toolchain_file_path(
-            self.platform,
-            self.arch,
-            self.compiler,
-            self.project_root_path
-        )
-        generate_options = super().generate_options + [
-            f'-DCMAKE_TOOLCHAIN_FILE={get_vcpkg_toolchain_file_path(self.vcpkg_root_path)}',
-            f'-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE={toolchain_file_path}'
-        ]
-
-        if self.arch.startswith('arm'):
-            zlib_dir = get_env_var('ZLIB_ROOT_DIR')
-            if zlib_dir is not None:
-                generate_options.append(f'-DZLIB_ROOT={zlib_dir}')
 
         return generate_options
 
@@ -682,7 +503,7 @@ def get_default_build_path(flavor=None):
     Returns:
         The default bin path.
     """
-    build_path = os.path.join(tempfile.gettempdir(), "build_do_proxywrapper", flavor)
+    build_path = os.path.join(tempfile.gettempdir(), "build_proxywrapper", flavor)
     return build_path
 
 def get_env_var(name):
