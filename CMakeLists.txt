@@ -4,16 +4,17 @@ project(proxywrapper)
 
 include(GNUInstallDirs)
 
-find_library(proxy REQUIRED)
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
-set(PROXYWRAP_LIB_NAME ${PROJECT_NAME})
-add_library(${PROXYWRAP_LIB_NAME} SHARED src/ProxyWrapper.cpp)
-target_include_directories(${PROXYWRAP_LIB_NAME}
+find_package(libproxy REQUIRED)
+
+add_library(${PROJECT_NAME} SHARED src/ProxyWrapper.cpp)
+target_include_directories(${PROJECT_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${proxywrapper_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include/${PROXYWRAP_LIB_NAME}>
+        $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
 )
-target_link_libraries(${PROXYWRAP_LIB_NAME} PUBLIC proxy)
+target_link_libraries(${PROJECT_NAME} PUBLIC PROXY::proxy)
 
-install(TARGETS ${PROXYWRAP_LIB_NAME} EXPORT proxywrapper DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES include/ProxyWrapper.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROXYWRAP_LIB_NAME})
+install(TARGETS ${PROJECT_NAME} EXPORT proxywrapper DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(FILES include/ProxyWrapper.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME})
