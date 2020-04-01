@@ -14,7 +14,7 @@ target_include_directories(${PROJECT_NAME}
         $<BUILD_INTERFACE:${proxywrapper_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
 )
-target_link_libraries(${PROJECT_NAME} PUBLIC libproxy::proxy)
+target_link_libraries(${PROJECT_NAME} PRIVATE libproxy::proxy)
 
 # Install the lib while also exporting all the usage requirements to a target named proxywrapper-targets
 install(TARGETS ${PROJECT_NAME} EXPORT proxywrapper-targets
