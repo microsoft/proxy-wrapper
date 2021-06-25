@@ -1,1 +1,1 @@
-TODO: Create a file called LICENSE (not LICENSE.TXT, LICENSE.md, etc.)…
+NOTE: This repo was intended to enable use of libproxy via dynamic linking. However, since libproxy itself is available as a dynamic library, this repo is entirely redundant. We will be deleting this repo and the end of July 2021.
